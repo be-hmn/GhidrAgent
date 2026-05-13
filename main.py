@@ -3,6 +3,7 @@ import logging
 import os
 
 from pathlib import Path
+from datetime import datetime
 
 from dotenv import load_dotenv
 
@@ -19,7 +20,7 @@ def configure_logging() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="GhidrAgent"
+        description="GhidrAgent - LLM-Friendly Binary Analysis Framework"
     )
 
     parser.add_argument(
@@ -29,32 +30,184 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--binary",
-        help="Override TARGET_BINARY",
+        # ⭐ required=False로 변경 (환경변수가 있을 수 있으므로)
+        required=False,
+        help="Target binary file path (can use TARGET_BINARY env var)",
     )
 
     parser.add_argument(
         "--output",
-        help="Override OUTPUT_PATH",
+        help="Output JSON path (default: output/{binary_name}.json)",
     )
 
     parser.add_argument(
         "--project-dir",
-        help="Override PROJECT_DIR",
+        help="Override PROJECT_DIR (default: .ghidra_projects)",
     )
 
     parser.add_argument(
         "--project-name",
-        help="Override PROJECT_NAME",
+        help="Override PROJECT_NAME (default: GhidrAgentProject)",
+    )
+
+    parser.add_argument(
+        "--timestamp",
+        action="store_true",
+        help="Add timestamp to output filename",
     )
 
     return parser.parse_args()
 
 
+def resolve_binary_path(binary_path_str: str) -> Path:
+    """바이너리 파일 경로 해석 (확장자 없어도 작동)
+
+    확장자가 없는 경우:
+    1. 정확히 그 파일이 있는지 확인
+    2. 없으면 흔한 확장자 자동 추가 시도 (.exe, .elf, .bin)
+
+    Args:
+        binary_path_str: 바이너리 경로 (확장자 있을 수도, 없을 수도)
+
+    Returns:
+        존재하는 바이너리 파일 경로
+
+    Raises:
+        FileNotFoundError: 파일을 찾을 수 없음
+
+    Examples:
+        "easy_crack.exe" → /path/to/easy_crack.exe
+        "easy_crack" → /path/to/easy_crack (파일 있으면)
+        "malware" → /path/to/malware.elf (malware.exe 없으면 시도)
+    """
+
+    path = Path(binary_path_str).resolve()
+
+    logging.debug("Trying to resolve binary path: %s", path)
+
+    # 1. 정확히 그 파일이 있는지 확인
+    if path.exists() and path.is_file():
+        logging.debug("Binary found (exact match): %s", path)
+        return path
+
+    # 2. 파일이 없으면 흔한 확장자 시도
+    common_extensions = [
+        ".exe",
+        ".elf",
+        ".bin",
+        ".o",
+        ".so",
+        ".dylib",
+        ".dll",
+        ".sys",
+    ]
+
+    for ext in common_extensions:
+        candidate = path.parent / (path.name + ext)
+
+        logging.debug("Trying extension: %s", candidate)
+
+        if candidate.exists() and candidate.is_file():
+            logging.info(
+                "Binary file found with extension: %s",
+                candidate.name
+            )
+            return candidate
+
+    # 3. 아무것도 찾지 못함
+    raise FileNotFoundError(
+        f"Binary file not found: {path}\n"
+        f"Tried: {path.name}, "
+        f"{path.name}.exe, {path.name}.elf, {path.name}.bin, ..."
+    )
+
+
+def generate_output_path(
+        binary_path: Path,
+        args_output: str = None,
+        add_timestamp: bool = False,
+) -> Path:
+    """바이너리 이름을 기반으로 output 경로 생성
+
+    Args:
+        binary_path: 바이너리 파일 경로
+        args_output: CLI에서 명시적으로 지정된 output 경로
+        add_timestamp: 타임스탬프 추가 여부
+
+    Returns:
+        생성된 output 파일 경로
+
+    Examples:
+        binary_path="/path/to/easy_crack.exe"
+        → "output/easy_crack.json"
+
+        binary_path="/path/to/Easy_ELF" (no extension)
+        → "output/Easy_ELF.json"
+
+        binary_path="/path/to/malware.elf", add_timestamp=True
+        → "output/malware_2026-05-13_20-44-38.json"
+    """
+
+    # 명시적으로 지정된 경로가 있으면 그것 사용
+    if args_output:
+        return Path(args_output).resolve()
+
+    # 바이너리 이름 (확장자 포함/제외 모두 처리)
+    # easy_crack.exe → easy_crack
+    # Easy_ELF → Easy_ELF
+    binary_name = binary_path.stem
+
+    # 타임스탐프 추가 (선택사항)
+    if add_timestamp:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{binary_name}_{timestamp}.json"
+    else:
+        filename = f"{binary_name}.json"
+
+    # output 디렉토리 생성 및 파일 경로 반환
+    output_dir = Path("output").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / filename
+
+    return output_path
+
+
 def load_config(
         args: argparse.Namespace,
 ) -> dict:
+    """설정 로드 (환경 변수 + CLI 옵션)"""
 
-    load_dotenv()
+    # ⭐ .env 파일 먼저 로드
+    load_dotenv(verbose=True)
+
+    # 바이너리 경로 (필수)
+    binary_path_str = args.binary or os.getenv("TARGET_BINARY")
+
+    if not binary_path_str:
+        raise ValueError(
+            "Binary path is required: use --binary option or set TARGET_BINARY env var"
+        )
+
+    logging.info("Binary path from config: %s", binary_path_str)
+
+    # 바이너리 경로 해석 (확장자 자동 추가 시도)
+    try:
+        binary_path = resolve_binary_path(binary_path_str)
+    except FileNotFoundError as e:
+        logging.error("Failed to resolve binary path: %s", str(e))
+        raise
+
+    logging.info("Binary file resolved: %s", binary_path)
+
+    # Output 경로 생성 (auto-generate from binary name)
+    output_path = generate_output_path(
+        binary_path=binary_path,
+        args_output=args.output or os.getenv("OUTPUT_PATH"),
+        add_timestamp=args.timestamp,
+    )
+
+    logging.info("Output path: %s", output_path)
 
     config = {
         "ghidra_home": (
@@ -62,18 +215,9 @@ def load_config(
                 or os.getenv("GHIDRA_HOME")
         ),
 
-        "binary": (
-                args.binary
-                or os.getenv("TARGET_BINARY")
-        ),
+        "binary": str(binary_path),
 
-        "output": (
-                args.output
-                or os.getenv(
-            "OUTPUT_PATH",
-            "output/functions.json",
-        )
-        ),
+        "output": str(output_path),
 
         "project_dir": (
                 args.project_dir
@@ -87,7 +231,7 @@ def load_config(
                 args.project_name
                 or os.getenv(
             "PROJECT_NAME",
-            "GhidrAgentProject",
+            f"GhidrAgentProject_{binary_path.stem}",
         )
         ),
     }
@@ -108,6 +252,9 @@ def load_config(
             f"Missing configuration: {missing}"
         )
 
+    logging.info("Configuration loaded successfully")
+    logging.debug("Config: %s", {k: v for k, v in config.items() if k != "binary"})
+
     return config
 
 
@@ -115,6 +262,7 @@ def validate_paths(
         ghidra_home: Path,
         binary_path: Path,
 ) -> None:
+    """경로 검증"""
 
     if not ghidra_home.exists():
         raise FileNotFoundError(
@@ -137,7 +285,11 @@ def main() -> None:
 
     args = parse_args()
 
-    config = load_config(args)
+    try:
+        config = load_config(args)
+    except (ValueError, FileNotFoundError) as e:
+        logging.error("Configuration error: %s", str(e))
+        raise
 
     ghidra_home = Path(
         config["ghidra_home"]
@@ -157,12 +309,20 @@ def main() -> None:
 
     project_name = config["project_name"]
 
-    validate_paths(
-        ghidra_home,
-        binary_path,
-    )
+    try:
+        validate_paths(
+            ghidra_home,
+            binary_path,
+        )
+    except FileNotFoundError as e:
+        logging.error("Path validation error: %s", str(e))
+        raise
 
-    logging.info("Starting analysis")
+    logging.info(
+        "Starting analysis: %s → %s",
+        binary_path.name,
+        output_path.name,
+    )
 
     results = run_analysis(
         ghidra_home=ghidra_home,
@@ -177,8 +337,9 @@ def main() -> None:
     )
 
     logging.info(
-        "Analysis complete (%d functions)",
+        "Analysis complete: %d functions → %s",
         len(results),
+        output_path.name,
     )
 
 
