@@ -62,7 +62,7 @@ GhidrAgent/
 │   └── runtime.py
 │
 ├── output/
-│   └── functions.json
+│   └── {BINARY_NAME}.json
 │
 ├── .binary/
 │   └── target.exe
@@ -145,10 +145,11 @@ uv sync
 프로젝트 루트에 `.env` 생성
 
 ```env
-GHIDRA_HOME=C:\ghidra_11.1_PUBLIC
-BINARY_PATH=.binary\Easy_CrackMe.exe
-PROJECT_NAME=GhidrAgentProject
-OUTPUT_PATH=output\functions.json
+GHIDRA_HOME={ghidra_install_path}
+BINARY_PATH=.binary\{target_binary_name}
+
+PROJECT_DIR=.ghidra_projects
+PROJECT_NAME={project_name}
 ```
 
 ---
