@@ -1,0 +1,176 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+venv/
+.venv
+env/
+ENV/
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+*.code-workspace
+
+# Ghidra Analysis
+.ghidra_project/
+projects/
+*.gpr
+*.gpr.RepositoryDB/
+*.rep/
+.ghidra_settings/
+
+# Analysis Output
+output/
+*.json
+!requirements.txt
+result/
+analysis_results/
+rag_dataset.json
+rag_classification.json
+ghidra_functions.json
+
+# Binary Files
+binaries/
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+
+# Temporary Files
+*.tmp
+*.bak
+*.swp
+*.swo
+temp/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Log Files
+*.log
+logs/
+debug.log
+
+# Ghidra Cache
+.cache/
+cache/
+
+# Java
+*.class
+*.jar
+target/
+
+# Node (if using Node tools)
+node_modules/
+npm-debug.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation
+docs/_build/
+site/
+
+# Credentials (IMPORTANT!)
+.env
+.env.prod
+.env.dev
+secrets.json
+credentials.json
+api_keys.json
+
+# MacOS
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+desktop.ini
+$RECYCLE.BIN/
+
+# Jetbrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# pytest
+.pytest_cache/
+.tox/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IPython
+.ipynb_checkpoints/
+
+# Poetry
+poetry.lock
+
+# Pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Custom paths (project-specific)
+/venv
+/.idea
+/.vscode
