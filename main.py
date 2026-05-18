@@ -157,7 +157,7 @@ def generate_output_path(
     # Easy_ELF → Easy_ELF
     binary_name = binary_path.stem
 
-    # 타임스탐프 추가 (선택사항)
+    # 타임스탬프 추가 (선택사항)
     if add_timestamp:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"{binary_name}_{timestamp}.json"

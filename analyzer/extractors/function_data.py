@@ -1,10 +1,10 @@
 """함수 데이터 통합 추출 - Pyhidra 최적화"""
 
 import logging
-from typing import Dict
+from typing import Dict, Optional, List
 
 from analyzer.extractors.callgraph import extract_callgraph
-from analyzer.extractors.api_calls import extract_api_calls
+from analyzer.extractors.api_calls import extract_api_calls, extract_api_calls_split
 from analyzer.extractors.strings import extract_strings
 from analyzer.extractors.signatures import extract_signature
 from analyzer.extractors.metrics import extract_metrics
@@ -55,7 +55,7 @@ def should_analyze_function(func) -> bool:
     return True
 
 
-def extract_function_data(flat_api, func) -> Dict:
+def extract_function_data(flat_api, func) -> Optional[Dict]:
     """함수 데이터 통합 추출 (Pyhidra 최적화)
 
     이 함수는 다음 정보를 수집합니다:
@@ -83,7 +83,9 @@ def extract_function_data(flat_api, func) -> Dict:
         signature = extract_signature(func)
 
         # 3. API 호출
-        api_calls_dict = extract_api_calls(flat_api, func)
+        api_calls_split = extract_api_calls_split(flat_api, func)
+        api_calls_dict = api_calls_split.get("standard", {})
+        custom_calls_dict = api_calls_split.get("custom", {})
 
         # 4. 문자열 (노이즈 제거 포함)
         strings_list = extract_strings(flat_api, func)
@@ -102,10 +104,11 @@ def extract_function_data(flat_api, func) -> Dict:
             # 기본 정보 (하위 호환성)
             "name": func_name,
             "body_size": body_size,
-            "calls": callgraph["calls"],
-            "called_by": callgraph["called_by"],
+            "calls": callgraph.get("calls", []),
+            "called_by": callgraph.get("called_by", []),
             "api_calls": list(api_calls_dict.keys()),
-            "strings": [s["value"] for s in strings_list],
+            "custom_calls": list(custom_calls_dict.keys()),
+            "strings": _safe_string_values(strings_list),
             "parameters": signature["parameters"],
             "return_type": signature["return_type"],
 
@@ -124,6 +127,7 @@ def extract_function_data(flat_api, func) -> Dict:
             "calls": [],
             "called_by": [],
             "api_calls": [],
+            "custom_calls": [],
             "strings": [],
             "parameters": [],
             "return_type": "unknown",
@@ -131,3 +135,17 @@ def extract_function_data(flat_api, func) -> Dict:
             "call_sequence": [],
             "error": str(e),
         }
+
+
+def _safe_string_values(strings_list: List[Dict]) -> List[str]:
+    """문자열 리스트에서 value만 안전하게 추출합니다."""
+    if not isinstance(strings_list, list):
+        return []
+
+    values: List[str] = []
+    for item in strings_list:
+        if isinstance(item, dict):
+            value = item.get("value")
+            if value:
+                values.append(value)
+    return values

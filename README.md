@@ -242,6 +242,7 @@ python scripts\mcp_smoke.py --input output\Easy_CrackMe.json
 | calls | 내부 함수 호출 |
 | called_by | 호출한 함수 |
 | api_calls | 사용된 외부 API |
+| custom_calls | 사용자 정의/비표준 외부 호출 |
 | strings | 참조 문자열 |
 | parameters | 함수 파라미터 |
 | return_type | 반환 타입 |

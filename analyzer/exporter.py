@@ -79,6 +79,7 @@ def _mcp_row(row: Dict) -> Dict:
         "calls": row.get("calls", []),
         "called_by": row.get("called_by", []),
         "api_calls": row.get("api_calls", []),
+        "custom_calls": row.get("custom_calls", []),
         "strings": row.get("strings", []),
         "parameters": row.get("parameters", []),
         "return_type": row.get("return_type", "unknown"),
