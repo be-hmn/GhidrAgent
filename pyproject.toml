@@ -8,3 +8,6 @@ dependencies = [
     "jpype1",
     "python-dotenv",
 ]
+
+[project.scripts]
+mcp-smoke = "scripts.mcp_smoke:main"
