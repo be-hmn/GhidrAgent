@@ -146,7 +146,7 @@ uv sync
 
 ```env
 GHIDRA_HOME={ghidra_install_path}
-BINARY_PATH=.binary\{target_binary_name}
+TARGET_BINARY=.binary\{target_binary_name}
 
 PROJECT_DIR=.ghidra_projects
 PROJECT_NAME={project_name}
@@ -195,12 +195,19 @@ python main.py
 
 ---
 
+# MCP 출력 스모크 검사
+
+```bash
+python scripts\mcp_smoke.py --input output\Easy_CrackMe.json
+```
+
+---
+
 # 출력 결과 예시
 
 ```json
 {
   "name": "FUN_00401080",
-  "entry": "00401080",
   "body_size": 205,
   "calls": [
     "EndDialog",
@@ -213,6 +220,13 @@ python main.py
   "strings": [
     "Incorrect Password",
     "Congratulation !!"
+  ],
+  "call_sequence": [
+    {
+      "index": 0,
+      "target": "GetDlgItemTextA",
+      "description": "입력 받기"
+    }
   ]
 }
 ```
@@ -224,7 +238,6 @@ python main.py
 | 항목 | 설명 |
 |---|---|
 | name | 함수 이름 |
-| entry | 함수 시작 주소 |
 | body_size | 함수 크기 |
 | calls | 내부 함수 호출 |
 | called_by | 호출한 함수 |
@@ -232,6 +245,8 @@ python main.py
 | strings | 참조 문자열 |
 | parameters | 함수 파라미터 |
 | return_type | 반환 타입 |
+| metrics | 복잡도 및 메트릭 |
+| call_sequence | 함수 내 호출 순서 |
 
 ---
 

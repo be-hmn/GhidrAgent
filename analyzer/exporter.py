@@ -26,7 +26,7 @@ def export_to_json(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 하위 호환성을 위해 조건부 처리
+    # MCP 최적화 형식
     if compact:
         export_data = _compact_format(rows)
     else:
@@ -49,42 +49,41 @@ def export_to_json(
 
 
 def _compact_format(rows: List[Dict]) -> List[Dict]:
-    """기존 호환성을 위한 압축 형식
-    
-    상세 정보(xrefs_detailed, strings_detailed 등)는 제외하고
-    기본 필드만 유지
-    """
+    """MCP 최소 필드만 포함하는 간결 형식"""
     compact_rows = []
 
     for row in rows:
-        compact_row = {
-            "name": row.get("name"),
-            "entry": row.get("entry"),
-            "body_size": row.get("body_size"),
-            "calls": row.get("calls", []),
-            "called_by": row.get("called_by", []),
-            "xrefs_in": row.get("xrefs_in", 0),
-            "xrefs_out": row.get("xrefs_out", 0),
-            "api_calls": row.get("api_calls", []),
-            "strings": row.get("strings", []),
-            "parameters": row.get("parameters", []),
-            "return_type": row.get("return_type", "unknown"),
-        }
-        compact_rows.append(compact_row)
+        compact_rows.append(_mcp_row(row))
 
     return compact_rows
 
 
 def _full_format(rows: List[Dict]) -> Dict:
-    """전체 상세 정보 포함 형식"""
+    """MCP 최적화 형식"""
 
     return {
         "metadata": {
-            "version": "2.0",
+            "version": "2.1",
             "total_functions": len(rows),
-            "export_format": "full_detailed",
+            "export_format": "mcp_min",
         },
-        "functions": rows,
+        "functions": [_mcp_row(row) for row in rows],
+    }
+
+
+def _mcp_row(row: Dict) -> Dict:
+    """MCP용 최소 필드로 정규화"""
+    return {
+        "name": row.get("name"),
+        "body_size": row.get("body_size"),
+        "calls": row.get("calls", []),
+        "called_by": row.get("called_by", []),
+        "api_calls": row.get("api_calls", []),
+        "strings": row.get("strings", []),
+        "parameters": row.get("parameters", []),
+        "return_type": row.get("return_type", "unknown"),
+        "metrics": row.get("metrics", {}),
+        "call_sequence": row.get("call_sequence", []),
     }
 
 
@@ -131,10 +130,6 @@ def export_summary(
             ),
             "avg_function_size": (
                 sum(r.get("body_size", 0) for r in rows) // len(rows)
-                if rows else 0
-            ),
-            "avg_xrefs_in": (
-                sum(r.get("xrefs_in", 0) for r in rows) // len(rows)
                 if rows else 0
             ),
 
@@ -223,13 +218,8 @@ def _get_most_referenced_apis(rows: List[Dict], top: int = 10) -> List[Dict]:
     api_count = {}
 
     for row in rows:
-        # api_calls_detailed 또는 api_calls 사용
-        if "api_calls_detailed" in row:
-            for api_name, count in row["api_calls_detailed"].items():
-                api_count[api_name] = api_count.get(api_name, 0) + count
-        else:
-            for api_name in row.get("api_calls", []):
-                api_count[api_name] = api_count.get(api_name, 0) + 1
+        for api_name in row.get("api_calls", []):
+            api_count[api_name] = api_count.get(api_name, 0) + 1
 
     sorted_apis = sorted(
         api_count.items(),

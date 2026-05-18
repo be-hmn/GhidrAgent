@@ -4,11 +4,11 @@ import logging
 from typing import Dict
 
 from analyzer.extractors.callgraph import extract_callgraph
-from analyzer.extractors.xrefs import extract_xrefs
 from analyzer.extractors.api_calls import extract_api_calls
 from analyzer.extractors.strings import extract_strings
 from analyzer.extractors.signatures import extract_signature
 from analyzer.extractors.metrics import extract_metrics
+from analyzer.extractors.call_sequence import extract_call_sequence
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +59,13 @@ def extract_function_data(flat_api, func) -> Dict:
     """함수 데이터 통합 추출 (Pyhidra 최적화)
 
     이 함수는 다음 정보를 수집합니다:
-    - 함수 이름, 엔트리 포인트, 크기
+    - 함수 이름, 크기
     - 호출 관계 (calls, called_by)
     - 파라미터 및 반환 타입
-    - API 호출 (상세 정보 포함)
-    - 참조 문자열 (값과 주소 포함)
-    - Cross-reference (상세 분류)
+    - API 호출
+    - 참조 문자열
     - 복잡도 메트릭
+    - 호출 순서
     """
 
     func_name = func.getName()
@@ -88,37 +88,30 @@ def extract_function_data(flat_api, func) -> Dict:
         # 4. 문자열 (노이즈 제거 포함)
         strings_list = extract_strings(flat_api, func)
 
-        # 5. XREF
-        xrefs_detailed = extract_xrefs(flat_api, func)
-
-        # 6. 메트릭
+        # 5. 메트릭
         metrics = extract_metrics(flat_api, func)
 
-        # 7. 기본 정보
+        # 6. 기본 정보
         body_size = func.getBody().getNumAddresses()
-        entry_point = str(func.getEntryPoint())
 
-        # 8. 반환 구조 (기존 호환성 유지)
+        # 7. 호출 순서
+        call_sequence = extract_call_sequence(flat_api, func)
+
+        # 8. MCP 최적화 반환 구조
         return {
             # 기본 정보 (하위 호환성)
             "name": func_name,
-            "entry": entry_point,
             "body_size": body_size,
             "calls": callgraph["calls"],
             "called_by": callgraph["called_by"],
-            "xrefs_in": xrefs_detailed["internal_calls"] + xrefs_detailed["external_references"],
-            "xrefs_out": xrefs_detailed["flow_references"] + xrefs_detailed["fallthrough"],
             "api_calls": list(api_calls_dict.keys()),
             "strings": [s["value"] for s in strings_list],
             "parameters": signature["parameters"],
             "return_type": signature["return_type"],
 
             # 확장 정보
-            "xrefs_detailed": xrefs_detailed,
-            "api_calls_detailed": api_calls_dict,
-            "strings_detailed": strings_list,
-            "parameters_detailed": signature["parameters"],
             "metrics": metrics,
+            "call_sequence": call_sequence,
         }
 
     except Exception as e:
@@ -127,15 +120,14 @@ def extract_function_data(flat_api, func) -> Dict:
         # 폴백: 최소 정보만 반환
         return {
             "name": func_name,
-            "entry": str(func.getEntryPoint()),
             "body_size": func.getBody().getNumAddresses(),
             "calls": [],
             "called_by": [],
-            "xrefs_in": 0,
-            "xrefs_out": 0,
             "api_calls": [],
             "strings": [],
             "parameters": [],
             "return_type": "unknown",
+            "metrics": {},
+            "call_sequence": [],
             "error": str(e),
         }
