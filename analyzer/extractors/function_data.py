@@ -5,11 +5,15 @@ from typing import Dict, Optional, List
 
 from analyzer.extractors.callgraph import extract_callgraph
 from analyzer.extractors.api_calls import extract_api_calls, extract_api_calls_split
-from analyzer.extractors.strings import extract_strings
+from analyzer.extractors.strings import (
+    extract_resolved_data_from_decompile,
+    extract_strings,
+)
 from analyzer.extractors.signatures import extract_signature
 from analyzer.extractors.metrics import extract_metrics
 from analyzer.extractors.call_sequence import extract_call_sequence
 from analyzer.extractors.decompiler import extract_decompiled_code
+from analyzer.extractors.validation import extract_validation_constraints
 
 logger = logging.getLogger(__name__)
 
@@ -88,20 +92,28 @@ def extract_function_data(flat_api, func, decompiler=None) -> Optional[Dict]:
         api_calls_dict = api_calls_split.get("standard", {})
         custom_calls_dict = api_calls_split.get("custom", {})
 
-        # 4. 문자열 (노이즈 제거 포함)
-        strings_list = extract_strings(flat_api, func)
+        # 4. Decompile code
+        decompiled_code = extract_decompiled_code(decompiler, func)
 
-        # 5. 메트릭
+        # 5. 문자열 (노이즈 제거 포함)
+        strings_list = extract_strings(flat_api, func)
+        resolved_data = extract_resolved_data_from_decompile(
+            flat_api,
+            decompiled_code,
+        )
+        validation_constraints = extract_validation_constraints(
+            decompiled_code,
+            resolved_data,
+        )
+
+        # 6. 메트릭
         metrics = extract_metrics(flat_api, func)
 
-        # 6. 기본 정보
+        # 7. 기본 정보
         body_size = func.getBody().getNumAddresses()
 
-        # 7. 호출 순서
+        # 8. 호출 순서
         call_sequence = extract_call_sequence(flat_api, func)
-
-        # 8. Decompile code
-        decompiled_code = extract_decompiled_code(decompiler, func)
 
         # 9. MCP 최적화 반환 구조
         return {
@@ -112,7 +124,7 @@ def extract_function_data(flat_api, func, decompiler=None) -> Optional[Dict]:
             "called_by": callgraph.get("called_by", []),
             "api_calls": list(api_calls_dict.keys()),
             "custom_calls": list(custom_calls_dict.keys()),
-            "strings": _safe_string_values(strings_list),
+            "strings": _merge_string_values(strings_list, resolved_data),
             "parameters": signature["parameters"],
             "return_type": signature["return_type"],
 
@@ -120,6 +132,8 @@ def extract_function_data(flat_api, func, decompiler=None) -> Optional[Dict]:
             "metrics": metrics,
             "call_sequence": call_sequence,
             "decompiled_code": decompiled_code,
+            "resolved_data": resolved_data,
+            "validation_constraints": validation_constraints,
         }
 
     except Exception as e:
@@ -139,6 +153,8 @@ def extract_function_data(flat_api, func, decompiler=None) -> Optional[Dict]:
             "metrics": {},
             "call_sequence": [],
             "decompiled_code": None,
+            "resolved_data": [],
+            "validation_constraints": [],
             "error": str(e),
         }
 
@@ -154,4 +170,30 @@ def _safe_string_values(strings_list: List[Dict]) -> List[str]:
             value = item.get("value")
             if value:
                 values.append(value)
+    return values
+
+
+def _merge_string_values(
+        strings_list: List[Dict],
+        resolved_data: List[Dict],
+) -> List[str]:
+    """Merge normal string references with DAT_xxx resolved values."""
+    values: List[str] = []
+    seen = set()
+
+    for value in _safe_string_values(strings_list):
+        if value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+
+    for item in resolved_data:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+
     return values

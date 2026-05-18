@@ -86,6 +86,8 @@ def _mcp_row(row: Dict) -> Dict:
         "metrics": row.get("metrics", {}),
         "call_sequence": row.get("call_sequence", []),
         "decompiled_code": row.get("decompiled_code"),
+        "resolved_data": row.get("resolved_data", []),
+        "validation_constraints": row.get("validation_constraints", []),
     }
 
 
