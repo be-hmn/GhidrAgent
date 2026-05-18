@@ -1,12 +1,26 @@
 """Ghidra 자동 분석 실행 - Pyhidra 최적화"""
 
 import logging
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List
 
+from analyzer.extractors.decompiler import create_decompiler, dispose_decompiler
 from analyzer.extractors.function_data import extract_function_data
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def bundle_host_reference():
+    """Keep Ghidra's script bundle host alive during headless analysis."""
+    from ghidra.app.script import GhidraScriptUtil
+
+    GhidraScriptUtil.acquireBundleHostReference()
+    try:
+        yield
+    finally:
+        GhidraScriptUtil.releaseBundleHostReference()
 
 
 def initialize_pyhidra(ghidra_home: Path):
@@ -79,6 +93,11 @@ def run_auto_analysis(program):
 
         monitor = ConsoleTaskMonitor()
         analysis_manager.reAnalyzeAll(None)
+
+        options = program.getOptions("Analysis")
+        for option_name in options.getOptionNames():
+            logger.info("Analysis option: %s", option_name)
+
         analysis_manager.startAnalysis(monitor)
 
         logger.info("Auto analysis completed")
@@ -110,6 +129,7 @@ def iterate_functions(program) -> List[dict]:
     from ghidra.program.flatapi import FlatProgramAPI
 
     flat_api = FlatProgramAPI(program)
+    decompiler = create_decompiler(program)
     rows = []
 
     listing = program.getListing()
@@ -123,33 +143,36 @@ def iterate_functions(program) -> List[dict]:
     idx = 1
     skipped = 0
 
-    for func in listing.getFunctions(True):
-        func_name = func.getName()
+    try:
+        for func in listing.getFunctions(True):
+            func_name = func.getName()
 
-        logger.info(
-            "[%d/%d] Processing %s",
-            idx,
-            total_functions,
-            func_name,
-        )
+            logger.info(
+                "[%d/%d] Processing %s",
+                idx,
+                total_functions,
+                func_name,
+            )
 
-        try:
-            data = extract_function_data(flat_api, func)
+            try:
+                data = extract_function_data(flat_api, func, decompiler)
 
-            # 함수 필터링으로 인해 None 반환된 경우 (thunk, CRT 등)
-            if data is not None:
-                rows.append(data)
-            else:
+                # 함수 필터링으로 인해 None 반환된 경우 (thunk, CRT 등)
+                if data is not None:
+                    rows.append(data)
+                else:
+                    skipped += 1
+                    logger.debug(f"Skipped function: {func_name}")
+
+            except Exception:
+                logger.exception(f"Failed processing {func_name}")
                 skipped += 1
-                logger.debug(f"Skipped function: {func_name}")
+                continue
 
-        except Exception:
-            logger.exception(f"Failed processing {func_name}")
-            skipped += 1
-            continue
-
-        finally:
-            idx += 1
+            finally:
+                idx += 1
+    finally:
+        dispose_decompiler(decompiler)
 
     logger.info(
         "Analysis complete: %d functions analyzed, %d skipped",
@@ -173,9 +196,10 @@ def run_analysis(
     project = open_or_create_project(project_dir, project_name)
 
     try:
-        program = import_binary(project, binary_path)
-        run_auto_analysis(program)
-        rows = iterate_functions(program)
+        with bundle_host_reference():
+            program = import_binary(project, binary_path)
+            run_auto_analysis(program)
+            rows = iterate_functions(program)
 
         return rows
 

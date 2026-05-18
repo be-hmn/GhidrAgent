@@ -9,6 +9,7 @@ from analyzer.extractors.strings import extract_strings
 from analyzer.extractors.signatures import extract_signature
 from analyzer.extractors.metrics import extract_metrics
 from analyzer.extractors.call_sequence import extract_call_sequence
+from analyzer.extractors.decompiler import extract_decompiled_code
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def should_analyze_function(func) -> bool:
     return True
 
 
-def extract_function_data(flat_api, func) -> Optional[Dict]:
+def extract_function_data(flat_api, func, decompiler=None) -> Optional[Dict]:
     """함수 데이터 통합 추출 (Pyhidra 최적화)
 
     이 함수는 다음 정보를 수집합니다:
@@ -99,7 +100,10 @@ def extract_function_data(flat_api, func) -> Optional[Dict]:
         # 7. 호출 순서
         call_sequence = extract_call_sequence(flat_api, func)
 
-        # 8. MCP 최적화 반환 구조
+        # 8. Decompile code
+        decompiled_code = extract_decompiled_code(decompiler, func)
+
+        # 9. MCP 최적화 반환 구조
         return {
             # 기본 정보 (하위 호환성)
             "name": func_name,
@@ -115,6 +119,7 @@ def extract_function_data(flat_api, func) -> Optional[Dict]:
             # 확장 정보
             "metrics": metrics,
             "call_sequence": call_sequence,
+            "decompiled_code": decompiled_code,
         }
 
     except Exception as e:
@@ -133,6 +138,7 @@ def extract_function_data(flat_api, func) -> Optional[Dict]:
             "return_type": "unknown",
             "metrics": {},
             "call_sequence": [],
+            "decompiled_code": None,
             "error": str(e),
         }
 
