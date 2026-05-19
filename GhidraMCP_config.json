@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ghidragent": {
+      "command": "python",
+      "args": [
+        "C:\\Users\\NYH\\IdeaProjects\\GhidraMCP\\main.py",
+        "mcp"
+      ],
+      "env": {
+        "GHIDRA_HOME": "C:\\Program Files\\ghidra_11.0.1"
+      }
+    }
+  }
+}

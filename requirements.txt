@@ -1,3 +1,0 @@
-pyhidra
-jpype1
-python-dotenv
