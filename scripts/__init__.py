@@ -1,2 +1,2 @@
-"""Utility scripts for GhidraMCP."""
+"""Utility scripts for GhidrAgent."""
 
