@@ -1,9 +1,6 @@
 import argparse
-import asyncio
 import logging
 import os
-import subprocess
-import sys
 
 from pathlib import Path
 from datetime import datetime
@@ -12,7 +9,6 @@ from dotenv import load_dotenv
 
 from analyzer.runtime import run_analysis
 from analyzer.exporter import export_to_json
-from analyzer.mcp_server import main_mcp_server
 
 
 def configure_logging() -> None:
@@ -24,62 +20,43 @@ def configure_logging() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="GhidraMCP - LLM-Friendly Binary Analysis Framework"
+        description="GhidrAgent - LLM-Friendly Binary Analysis Framework"
     )
 
-    # 모드 선택
-    subparsers = parser.add_subparsers(dest="mode", help="작동 모드")
-
-    # CLI 모드 (기본값)
-    cli_parser = subparsers.add_parser("cli", help="CLI 모드 (기본값)")
-    cli_parser.add_argument(
+    parser.add_argument(
         "--ghidra-home",
         help="Override GHIDRA_HOME",
     )
-    cli_parser.add_argument(
+
+    parser.add_argument(
         "--binary",
+        # ⭐ required=False로 변경 (환경변수가 있을 수 있으므로)
         required=False,
         help="Target binary file path (can use TARGET_BINARY env var)",
     )
-    cli_parser.add_argument(
+
+    parser.add_argument(
         "--output",
         help="Output JSON path (default: output/{binary_name}.json)",
     )
-    cli_parser.add_argument(
+
+    parser.add_argument(
         "--project-dir",
         help="Override PROJECT_DIR (default: .ghidra_projects)",
     )
-    cli_parser.add_argument(
+
+    parser.add_argument(
         "--project-name",
-        help="Override PROJECT_NAME (default: GhidraMCPProject)",
+        help="Override PROJECT_NAME (default: GhidrAgentProject)",
     )
-    cli_parser.add_argument(
+
+    parser.add_argument(
         "--timestamp",
         action="store_true",
         help="Add timestamp to output filename",
     )
 
-    # MCP 모드
-    mcp_parser = subparsers.add_parser("mcp", help="MCP 서버 모드")
-    mcp_parser.add_argument(
-        "--stdio",
-        action="store_true",
-        help="Use stdio transport (default)",
-    )
-    mcp_parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port for SSE transport (default: 8000)",
-    )
-
-    args = parser.parse_args()
-
-    # 기본값: CLI 모드
-    if args.mode is None:
-        args.mode = "cli"
-
-    return args
+    return parser.parse_args()
 
 
 def resolve_binary_path(binary_path_str: str) -> Path:
@@ -196,40 +173,16 @@ def generate_output_path(
     return output_path
 
 
-def generate_project_name(
-        binary_path: Path,
-        project_name_template: str = None,
-) -> str:
-    """Generate a Ghidra project name from a template and binary metadata."""
-
-    template = project_name_template or "GhidraMCPProject_{binary_name}"
-    values = {
-        "binary_name": binary_path.stem,
-        "binary_stem": binary_path.stem,
-        "binary_file": binary_path.name,
-        "binary_suffix": binary_path.suffix.lstrip("."),
-    }
-
-    try:
-        return template.format(**values)
-    except KeyError as e:
-        supported = ", ".join(sorted(values))
-        raise ValueError(
-            f"Unsupported PROJECT_NAME placeholder: {{{e.args[0]}}}. "
-            f"Supported placeholders: {supported}"
-        ) from e
-
-
 def load_config(
         args: argparse.Namespace,
 ) -> dict:
     """설정 로드 (환경 변수 + CLI 옵션)"""
 
     # ⭐ .env 파일 먼저 로드
-    load_dotenv(verbose=True, override=True)
+    load_dotenv(verbose=True)
 
     # 바이너리 경로 (필수)
-    binary_path_str = getattr(args, 'binary', None) or os.getenv("TARGET_BINARY")
+    binary_path_str = args.binary or os.getenv("TARGET_BINARY")
 
     if not binary_path_str:
         raise ValueError(
@@ -250,20 +203,15 @@ def load_config(
     # Output 경로 생성 (auto-generate from binary name)
     output_path = generate_output_path(
         binary_path=binary_path,
-        args_output=getattr(args, 'output', None) or os.getenv("OUTPUT_PATH"),
-        add_timestamp=getattr(args, 'timestamp', False),
+        args_output=args.output or os.getenv("OUTPUT_PATH"),
+        add_timestamp=args.timestamp,
     )
 
     logging.info("Output path: %s", output_path)
 
-    project_name = generate_project_name(
-        binary_path=binary_path,
-        project_name_template=getattr(args, 'project_name', None) or os.getenv("PROJECT_NAME"),
-    )
-
     config = {
         "ghidra_home": (
-                getattr(args, 'ghidra_home', None)
+                args.ghidra_home
                 or os.getenv("GHIDRA_HOME")
         ),
 
@@ -272,7 +220,7 @@ def load_config(
         "output": str(output_path),
 
         "project_dir": (
-                getattr(args, 'project_dir', None)
+                args.project_dir
                 or os.getenv(
             "PROJECT_DIR",
             ".ghidra_projects",
@@ -280,7 +228,11 @@ def load_config(
         ),
 
         "project_name": (
-                project_name
+                args.project_name
+                or os.getenv(
+            "PROJECT_NAME",
+            f"GhidrAgentProject_{binary_path.stem}",
+        )
         ),
     }
 
@@ -328,56 +280,11 @@ def validate_paths(
         )
 
 
-def validate_mcp_output(
-        output_path: Path,
-) -> None:
-    """Run scripts/mcp_smoke.py against the exported MCP JSON."""
-
-    logging.info("Running MCP smoke validation: %s", output_path)
-
-    smoke_script = Path(__file__).resolve().parent / "scripts" / "mcp_smoke.py"
-    completed = subprocess.run(
-        [
-            sys.executable,
-            str(smoke_script),
-            "--input",
-            str(output_path),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    stdout = completed.stdout.strip()
-    stderr = completed.stderr.strip()
-
-    if completed.returncode != 0:
-        logging.error("MCP smoke validation failed")
-        if stdout:
-            logging.error(stdout)
-        if stderr:
-            logging.error(stderr)
-        raise ValueError(
-            f"MCP smoke validation failed: {output_path}"
-        )
-
-    if stdout:
-        logging.info(stdout)
-
-
 def main() -> None:
     configure_logging()
 
     args = parse_args()
 
-    if args.mode == "mcp":
-        _main_mcp(args)
-    else:
-        _main_cli(args)
-
-
-def _main_cli(args: argparse.Namespace) -> None:
-    """CLI 모드 메인 함수"""
     try:
         config = load_config(args)
     except (ValueError, FileNotFoundError) as e:
@@ -434,22 +341,6 @@ def _main_cli(args: argparse.Namespace) -> None:
         len(results),
         output_path.name,
     )
-
-    validate_mcp_output(output_path)
-
-
-def _main_mcp(args: argparse.Namespace) -> None:
-    """MCP 서버 모드 메인 함수"""
-    logging.info("Starting MCP server mode")
-    
-    # asyncio 이벤트 루프에서 서버 실행
-    try:
-        asyncio.run(main_mcp_server())
-    except KeyboardInterrupt:
-        logging.info("MCP server shut down")
-    except Exception as e:
-        logging.exception(f"MCP server error: {e}")
-        raise
 
 
 if __name__ == "__main__":

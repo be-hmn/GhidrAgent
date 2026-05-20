@@ -1,8 +1,8 @@
-# GhidraMCP
+# GhidrAgent
 
 Pyhidra 기반의 Headless Ghidra 자동 분석 프레임워크입니다.
 
-GhidraMCP는 다음 과정을 자동화합니다.
+GhidrAgent는 다음 과정을 자동화합니다.
 
 - Ghidra 프로젝트 생성
 - 바이너리 Import
@@ -55,7 +55,7 @@ GhidraMCP는 다음 과정을 자동화합니다.
 # 프로젝트 구조
 
 ```text
-GhidraMCP/
+GhidrAgent/
 ├── analyzer/
 │   ├── extractors/
 │   │   └── function_data.py
@@ -93,9 +93,9 @@ GhidraMCP/
 ## 1. Repository Clone
 
 ```bash
-git clone https://github.com/be-hmn/GhidraMCP.git
+git clone https://github.com/be-hmn/GhidrAgent.git
 
-cd GhidraMCP
+cd GhidrAgent
 ```
 
 ---
@@ -134,17 +134,8 @@ uv venv --python 3.11
 
 ## 5. 의존성 설치
 
-### CLI 모드
-
 ```bash
 uv sync
-```
-
-### MCP 서버 모드
-
-```bash
-uv sync
-pip install mcp  # MCP SDK
 ```
 
 ---
@@ -158,7 +149,7 @@ GHIDRA_HOME={ghidra_install_path}
 TARGET_BINARY=.binary\{target_binary_name}
 
 PROJECT_DIR=.ghidra_projects
-PROJECT_NAME=GhidraMCPProject_{binary_name}
+PROJECT_NAME={project_name}
 ```
 
 ---
@@ -196,92 +187,18 @@ PATH=C:\Program Files\Java\jdk-21\bin;%PATH%
 
 # 실행 방법
 
-## CLI 모드 (기본값)
-
-### 분석 실행
+## 분석 실행
 
 ```bash
-python main.py cli --binary {binary_path}
-```
-
-또는 환경변수 사용:
-
-```bash
-python main.py cli
-```
-
-### MCP 출력 스모크 검사
-
-```bash
-python scripts\mcp_smoke.py --input output\Easy_CrackMe.json
+python main.py
 ```
 
 ---
 
-## MCP 서버 모드
-
-GhidraMCP는 Model Context Protocol(MCP) 서버로도 실행할 수 있습니다.
-
-### MCP 서버 시작
+# MCP 출력 스모크 검사
 
 ```bash
-# stdio 모드 (권장)
-python main.py mcp
-
-# SSE 모드 (특정 포트)
-python main.py mcp --port 8000
-```
-
-### MCP 도구
-
-MCP 서버는 다음 도구를 제공합니다:
-
-#### 1. `analyze_binary` - 바이너리 분석
-
-```json
-{
-  "name": "analyze_binary",
-  "arguments": {
-    "ghidra_home": "/path/to/ghidra",
-    "binary_path": "/path/to/binary",
-    "project_dir": ".ghidra_projects",
-    "project_name": "MyProject"
-  }
-}
-```
-
-#### 2. `get_analysis_result` - 분석 결과 조회 (캐시)
-
-```json
-{
-  "name": "get_analysis_result",
-  "arguments": {
-    "binary_path": "/path/to/binary"
-  }
-}
-```
-
-#### 3. `validate_mcp_output` - MCP 출력 검증
-
-```json
-{
-  "name": "validate_mcp_output",
-  "arguments": {
-    "output_path": "/path/to/output.json"
-  }
-}
-```
-
-### MCP 리소스
-
-#### `ghidra://binaries` - 분석된 바이너리 목록
-
-```json
-{
-  "uri": "ghidra://binaries",
-  "name": "Available Binaries",
-  "mimeType": "application/json"
-}
+python scripts\mcp_smoke.py --input output\Easy_CrackMe.json
 ```
 
 ---
